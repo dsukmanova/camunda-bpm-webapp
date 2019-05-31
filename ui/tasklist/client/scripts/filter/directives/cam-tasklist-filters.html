@@ -40,8 +40,8 @@
          ng-style="{color: filter.properties.color}">
         {{ filter.name }}
 
-        <span ng-show="isFocused(filter)"
-              class="counter">{{ filterCount }}</span>
+        <span ng-show="filter.filterCount"
+              class="counter">{{ filter.filterCount }}</span>
       </a>
     </h4>
 

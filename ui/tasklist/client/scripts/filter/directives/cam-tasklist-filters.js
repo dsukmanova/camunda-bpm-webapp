@@ -25,13 +25,17 @@ module.exports = [function() {
       'Uri',
       'Notifications',
       '$translate',
+      '$http',
+      '$q',
       function(
         $scope,
         search,
         camAPI,
         Uri,
         Notifications,
-        $translate
+        $translate,
+        $http,
+        $q
       ) {
 
         var filtersData = $scope.filtersData = $scope.filtersData.newChild($scope);
@@ -43,10 +47,14 @@ module.exports = [function() {
         // observe ////////////////////////////////////////////////////////////////////////////////
 
         /**
-         * observe the count for the current filter
+         * update all filters when taskList changes
          */
-        filtersData.observe('taskList', function(taskList) {
-          $scope.filterCount = taskList.count;
+        filtersData.observe('taskList', function() {
+          $scope.filters.forEach(function(filter) {
+            _getFilterItemCount(filter).then(function(itemCount) {
+              filter.filterCount = itemCount;
+            });
+          });
         });
 
         /**
@@ -55,20 +63,42 @@ module.exports = [function() {
         $scope.state = filtersData.observe('filters', function(filters) {
 
           $scope.totalItems = filters.length;
-
-          for (var i = 0, filter; (filter = filters[i]); i++) {
+          var promises = [];
+          filters.forEach(function(filter, index) {
             filter.style = {
-              'z-index': filters.length + 10 - i
+              'z-index': filters.length + 10 - index
             };
-          }
-
-          $scope.filters = filters;
-
+            var promise = _getFilterItemCount(filter);
+            promises.push(promise);
+            promise.then(function(itemCount) {
+              filter.filterCount = itemCount;
+            });
+          });
+          $q.all(promises).then(function() {
+            $scope.filters = filters;
+          });
         });
 
         filtersData.observe('currentFilter', function(currentFilter) {
           $scope.currentFilter = currentFilter;
         });
+
+        /**
+         * returns filter's item amount
+         */
+        function _getFilterItemCount(filter) {
+          var deferred = $q.defer();
+          $http.get(Uri.appUri('engine://engine/:engine/filter/' + filter.id + '?itemCount=true'))
+            .success(
+              function(response) {
+                deferred.resolve(response.itemCount);
+              }
+            )
+            .catch(function(error) {
+              deferred.reject(error);
+            });
+          return deferred.promise;
+        }
 
         // selection ////////////////////////////////////////////////////////////////
 
@@ -76,13 +106,10 @@ module.exports = [function() {
          * select a filter
          */
         $scope.focus = function(filter) {
-          $scope.filterCount = undefined;
-
+          filtersData.changed('filters');
           search.updateSilently({
             filter: filter.id
           });
-
-          filtersData.changed('currentFilter');
         };
 
         /**
